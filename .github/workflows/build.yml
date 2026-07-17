@@ -29,33 +29,14 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
-
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
-
-    - name: Install Tools & Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y git zip unzip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev libsqlite3-dev tk-dev libgdbm-compat-dev libreoffice-writer
-        pip install --upgrade pip
-        pip install buildozer cython Pillow git+https://github.com/kivy/plyer.git
-
     - name: Configure Buildozer Spec & Assets
       run: |
+        # Génère des images par défaut si absentes pour éviter le crash d'assets de Buildozer
         python -c "from PIL import Image; img = Image.new('RGB', (512, 512), (255, 255, 255)); img.save('icon.png')"
         python -c "from PIL import Image; img = Image.new('RGB', (1024, 1024), (0, 255, 0)); img.save('presplash.png')"
 
         if [ ! -f buildozer.spec ]; then
+          pip install buildozer
           buildozer init
           sed -i 's/title = My Application/title = PNGTuber Mobile/' buildozer.spec
           sed -i 's/package.name = myapp/package.name = pngtubermobile/' buildozer.spec
@@ -63,29 +44,19 @@ jobs:
           sed -i 's/#requirements = python3,kivy/requirements = python3,pygame/' buildozer.spec
           sed -i 's/source.main = main.py/source.main = main_android.py/' buildozer.spec
           
-          # On fige les versions pour éviter d'appeler les outils de 2026 instables
+          # Fixs de compatibilité stables
           sed -i 's/#android.api = 33/android.api = 33/' buildozer.spec
-          sed -i 's/#android.minapi = 21/android.minapi = 21/' buildozer.spec
-          sed -i 's/#android.build_tools_version = .*/android.build_tools_version = 34.0.0/' buildozer.spec
           sed -i 's/#android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
           
           sed -i 's/icon.filename = %(source.dir)s\/data\/icon.png/icon.filename = icon.png/' buildozer.spec
           sed -i 's/presplash.filename = %(source.dir)s\/data\/presplash.png/presplash.filename = presplash.png/' buildozer.spec
         fi
 
-    - name: Install Android Build-Tools and AIDL
-      run: |
-        # Acceptation globale et installation manuelle forcée de la version stable 34.0.0
-        yes | sdkmanager --licenses || true
-        sdkmanager "build-tools;34.0.0" "platforms;android-33" "platform-tools"
-        
-        # Copie les outils dans le répertoire ciblé par Buildozer pour le forcer à les trouver
-        mkdir -p ~/.buildozer/android/platform/android-sdk/
-        cp -r $ANDROID_HOME/* ~/.buildozer/android/platform/android-sdk/ || true
-
-    - name: Run Buildozer
-      run: |
-        buildozer -v android debug
+    - name: Build Android APK with Containerized Buildozer
+      uses: ArtemSBulgakov/buildozer-action@v1
+      with:
+        command: buildozer android debug
+        buildozer_version: stable
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
