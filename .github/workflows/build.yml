@@ -28,20 +28,39 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Get Buildozer Docker Image
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Android SDK/NDK Dependencies
       run: |
-        docker pull jaime611/buildozer:latest
-    - name: Build APK with Buildozer
+        sudo apt-get update
+        sudo apt-get install -y git zip unzip openjdk-17-jdk autoconf libtool pkg-config zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev libsqlite3-dev tk-dev libgdbm-compat-dev libreoffice-writer
+
+    - name: Install Buildozer & Cython
       run: |
-        # Initialise un fichier buildozer par défaut si absent et lance la compilation en conteneur
+        pip install --upgrade pip
+        pip install buildozer cython git+https://github.com/kivy/plyer.git
+
+    - name: Configure and Run Buildozer
+      run: |
         if [ ! -f buildozer.spec ]; then
-          docker run --rm -v $(pwd):/home/developer/app jaime611/buildozer init
-          # Ajustement automatique pour cibler main_android.py
+          buildozer init
+          sed -i 's/title = My Application/title = PNGTuber Mobile/' buildozer.spec
+          sed -i 's/package.name = myapp/package.name = pngtubermobile/' buildozer.spec
           sed -i 's/source.include_exts = py,png,jpg,kv,atlas/source.include_exts = py,png/' buildozer.spec
+          sed -i 's/#requirements = python3,kivy/requirements = python3,pygame/' buildozer.spec
+          sed -i 's/source.main = main.py/source.main = main_android.py/' buildozer.spec
+          # Force l'acceptation automatique des licences Android SDK
+          sed -i 's/#android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
         fi
-        docker run --rm -v $(pwd):/home/developer/app jaime611/buildozer android debug
+        # Lancement de la compilation en mode automatique
+        buildozer -v android debug
+
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: PNGTuber-Android
-        path: .blur/bin/*.apk
+        path: bin/*.apk
