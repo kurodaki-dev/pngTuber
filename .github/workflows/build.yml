@@ -57,7 +57,6 @@ jobs:
           sed -i 's/#requirements = python3,kivy/requirements = python3,pygame/' buildozer.spec
           sed -i 's/source.main = main.py/source.main = main_android.py/' buildozer.spec
           
-          # Fixs critiques pour forcer les versions stables et éviter l'erreur sdkmanager
           sed -i 's/#android.api = 33/android.api = 33/' buildozer.spec
           sed -i 's/#android.minapi = 21/android.minapi = 21/' buildozer.spec
           sed -i 's/#android.ndk_api = 21/android.ndk_api = 21/' buildozer.spec
@@ -67,9 +66,19 @@ jobs:
           sed -i 's/presplash.filename = %(source.dir)s\/data\/presplash.png/presplash.filename = presplash.png/' buildozer.spec
         fi
 
+    - name: Auto-Accept All Android SDK Licenses
+      run: |
+        # On utilise le sdkmanager préinstallé sur la machine virtuelle Ubuntu de GitHub pour valider en boucle toutes les licences
+        mkdir -p ~/.android
+        touch ~/.android/repositories.cfg
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+        
+        # On copie aussi les fichiers de licences validés là où Buildozer va créer son propre SDK isolé
+        mkdir -p ~/.buildozer/android/platform/android-sdk/licenses
+        cp -r $ANDROID_HOME/licenses/* ~/.buildozer/android/platform/android-sdk/licenses/ || true
+
     - name: Run Buildozer
       run: |
-        # Lancement classique, Buildozer va maintenant télécharger le SDK complet adapté à l'API 33
         buildozer -v android debug
 
     - name: Upload APK Artifact
@@ -77,3 +86,4 @@ jobs:
       with:
         name: PNGTuber-Android
         path: bin/*.apk
+        
