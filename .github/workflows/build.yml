@@ -58,44 +58,69 @@ jobs:
         if [ ! -f buildozer.spec ]; then
           buildozer init
           
-          # Configuration des requirements pour Pygame (au lieu de Kivy)
+          # Configuration Requirements (Pygame) et métadonnées
           sed -i 's/requirements = python3,kivy/requirements = python3,pygame/g' buildozer.spec
-          
           sed -i 's/title = My Application/title = PNGTuber Mobile/g' buildozer.spec
           sed -i 's/package.name = myapp/package.name = pngtubermobile/g' buildozer.spec
           sed -i 's/source.include_exts = py,png,jpg,kv,atlas/source.include_exts = py,png/g' buildozer.spec
           sed -i 's/source.main = main.py/source.main = main_android.py/g' buildozer.spec
           
-          # Configuration des cibles d'API alignées sur le SDK global
+          # Alignement strict sur les versions du SDK installé manuellement
           sed -i 's/#android.api = 33/android.api = 33/g' buildozer.spec
           sed -i 's/#android.minapi = 21/android.minapi = 21/g' buildozer.spec
+          sed -i 's/#android.build_tools_version = .*/android.build_tools_version = 33.0.2/g' buildozer.spec
           sed -i 's/#android.accept_sdk_license = False/android.accept_sdk_license = True/g' buildozer.spec
           
-          # On force explicitement Buildozer à lire le SDK du système dans le fichier spec
+          # On force Buildozer à lire nos répertoires manuels
           sed -i 's|#android.sdk_path = .*|android.sdk_path = /usr/local/lib/android/sdk|g' buildozer.spec
+          sed -i 's|#android.ndk_path = .*|android.ndk_path = /usr/local/lib/android/sdk/ndk/23.1.7779620|g' buildozer.spec
           
           sed -i 's/icon.filename = %(source.dir)s\/data\/icon.png/icon.filename = icon.png/g' buildozer.spec
           sed -i 's/presplash.filename = %(source.dir)s\/data\/presplash.png/presplash.filename = presplash.png/g' buildozer.spec
         fi
 
-    - name: Prepare Android SDK & Accept Licenses
+    - name: Install Android SDK command-line tools and packages
       run: |
         export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
-        mkdir -p $ANDROID_SDK_ROOT/tools/bin
-        
-        # Acceptation matérielle de toutes les licences du SDK global
-        yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
-        
-        # Exportation des variables pour les étapes suivantes
+        sudo rm -rf $ANDROID_SDK_ROOT
+        sudo mkdir -p $ANDROID_SDK_ROOT
+
+        # Téléchargement et extraction des outils officiels Google
+        CMDLINE_ZIP=/tmp/cmdline-tools.zip
+        curl -fsSL "https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip" -o $CMDLINE_ZIP
+        sudo unzip -q $CMDLINE_ZIP -d $ANDROID_SDK_ROOT/cmdline-tools
+        sudo mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
+
+        # Permissions utilisateur
+        sudo chown -R $USER:$USER $ANDROID_SDK_ROOT
+
+        # Injection temporaire dans le PATH du step actuel
+        export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+
+        # Acceptation des licences et installation des paquets requis (avec AIDL)
+        yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses
+        sdkmanager --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "platforms;android-33" "build-tools;33.0.2" "cmdline-tools;latest" "ndk;23.1.7779620"
+
+        # Exportation persistante des variables d'environnement pour la suite du workflow
         echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
         echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+        echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/23.1.7779620" >> $GITHUB_ENV
+
+    - name: Verify aidl and sdkmanager
+      run: |
+        export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
+        export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
+        which sdkmanager || { echo "sdkmanager non trouvé"; exit 1; }
+        which aidl || { echo "aidl non trouvé (build-tools manquant)"; exit 1; }
+        sdkmanager --list --sdk_root="$ANDROID_SDK_ROOT"
 
     - name: Run Buildozer
       run: |
         export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
         export ANDROID_HOME=/usr/local/lib/android/sdk
-        export ANDROID_NDK_HOME=""
-        
+        export ANDROID_NDK_HOME=/usr/local/lib/android/sdk/ndk/23.1.7779620
+        export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
+
         buildozer -v android debug
 
     - name: Upload APK Artifact
