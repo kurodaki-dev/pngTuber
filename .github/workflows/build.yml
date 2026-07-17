@@ -63,22 +63,28 @@ jobs:
           sed -i 's/#requirements = python3,kivy/requirements = python3,pygame/' buildozer.spec
           sed -i 's/source.main = main.py/source.main = main_android.py/' buildozer.spec
           
-          # Paramètres de build stables
+          # On fige les versions pour éviter d'appeler les outils de 2026 instables
           sed -i 's/#android.api = 33/android.api = 33/' buildozer.spec
           sed -i 's/#android.minapi = 21/android.minapi = 21/' buildozer.spec
+          sed -i 's/#android.build_tools_version = .*/android.build_tools_version = 34.0.0/' buildozer.spec
           sed -i 's/#android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
           
           sed -i 's/icon.filename = %(source.dir)s\/data\/icon.png/icon.filename = icon.png/' buildozer.spec
           sed -i 's/presplash.filename = %(source.dir)s\/data\/presplash.png/presplash.filename = presplash.png/' buildozer.spec
         fi
 
-    - name: Run Buildozer
-      env:
-        ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
+    - name: Install Android Build-Tools and AIDL
       run: |
-        # On accepte les licences du SDK fraîchement installé
+        # Acceptation globale et installation manuelle forcée de la version stable 34.0.0
         yes | sdkmanager --licenses || true
-        # On lance le build
+        sdkmanager "build-tools;34.0.0" "platforms;android-33" "platform-tools"
+        
+        # Copie les outils dans le répertoire ciblé par Buildozer pour le forcer à les trouver
+        mkdir -p ~/.buildozer/android/platform/android-sdk/
+        cp -r $ANDROID_HOME/* ~/.buildozer/android/platform/android-sdk/ || true
+
+    - name: Run Buildozer
+      run: |
         buildozer -v android debug
 
     - name: Upload APK Artifact
