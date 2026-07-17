@@ -1,5 +1,4 @@
-name: PNGTuber Windows Build
-
+name: PNGTuber Pro Windows Build
 
 on:
   push:
@@ -7,75 +6,70 @@ on:
       - main
       - master
 
+  workflow_dispatch:
 
 
 jobs:
 
-
-  build:
-
+  build-windows:
 
     runs-on: windows-latest
 
 
-
     steps:
 
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-    - uses: actions/checkout@v4
 
-
-
-    - uses: actions/setup-python@v5
-
+    - name: Setup Python
+      uses: actions/setup-python@v5
       with:
-
         python-version: "3.11"
 
 
-
-    - name: Install
-
+    - name: Upgrade pip
       run: |
-
-        pip install pygame pillow numpy sounddevice pyinstaller
-
+        python -m pip install --upgrade pip
 
 
-    - name: Build PNGTuber
-
+    - name: Install dependencies
       run: |
-
-        pyinstaller ^
-        --noconfirm ^
-        --onefile ^
-        --windowed ^
-        --name PNGTuberPro ^
-        PNGTuberPro/main.py
+        pip install pygame
+        pip install pillow
+        pip install numpy
+        pip install sounddevice
+        pip install pyinstaller
 
 
-
-    - name: Build Creator
-
+    - name: Check project files
       run: |
-
-        pyinstaller ^
-        --noconfirm ^
-        --onefile ^
-        --windowed ^
-        --name PLIMBCreator ^
-        PLIMBCreator/creator.py
+        dir
+        dir PNGTuberPro
+        dir PLIMBCreator
 
 
+    - name: Build PNGTuber Pro EXE
+      run: |
+        pyinstaller --noconfirm --onefile --windowed --name PNGTuberPro PNGTuberPro/main.py
 
-    - name: Upload
 
+    - name: Build PLIMB Creator EXE
+      run: |
+        pyinstaller --noconfirm --onefile --windowed --name PLIMBCreator PLIMBCreator/creator.py
+
+
+    - name: Copy extra files
+      run: |
+        mkdir release
+        copy dist\PNGTuberPro.exe release\
+        copy dist\PLIMBCreator.exe release\
+
+
+    - name: Upload Windows Build
       uses: actions/upload-artifact@v4
-
       with:
 
-        name: PNGTuber-Windows
+        name: PNGTuber-Pro-Windows
 
-        path: |
-          dist/PNGTuberPro.exe
-          dist/PLIMBCreator.exe
+        path: release/
