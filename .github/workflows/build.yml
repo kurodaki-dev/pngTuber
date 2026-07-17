@@ -1,0 +1,47 @@
+name: Multi-Platform Build (Windows & Android)
+
+on:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    - name: Install Dependencies
+      run: |
+        pip install pygame Pillow sounddevice numpy pyinstaller
+    - name: Build Windows EXE
+      run: |
+        pyinstaller --noconfirm --onefile --windowed --name="PNGTuberPro_Windows" main_windows.py
+    - name: Upload Windows Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: PNGTuber-Windows
+        path: dist/PNGTuberPro_Windows.exe
+
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Get Buildozer Docker Image
+      run: |
+        docker pull jaime611/buildozer:latest
+    - name: Build APK with Buildozer
+      run: |
+        # Initialise un fichier buildozer par défaut si absent et lance la compilation en conteneur
+        if [ ! -f buildozer.spec ]; then
+          docker run --rm -v $(pwd):/home/developer/app jaime611/buildozer init
+          # Ajustement automatique pour cibler main_android.py
+          sed -i 's/source.include_exts = py,png,jpg,kv,atlas/source.include_exts = py,png/' buildozer.spec
+        fi
+        docker run --rm -v $(pwd):/home/developer/app jaime611/buildozer android debug
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: PNGTuber-Android
+        path: .blur/bin/*.apk
