@@ -1,133 +1,81 @@
-name: Multi-Platform Build (Windows & Android)
+name: PNGTuber Windows Build
+
 
 on:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
+      - master
+
+
 
 jobs:
-  build-windows:
+
+
+  build:
+
+
     runs-on: windows-latest
+
+
+
     steps:
+
+
     - uses: actions/checkout@v4
+
+
+
     - uses: actions/setup-python@v5
+
       with:
-        python-version: '3.11'
-    - name: Install Dependencies
+
+        python-version: "3.11"
+
+
+
+    - name: Install
+
       run: |
-        pip install pygame Pillow sounddevice numpy pyinstaller
-    - name: Build Windows EXE
+
+        pip install pygame pillow numpy sounddevice pyinstaller
+
+
+
+    - name: Build PNGTuber
+
       run: |
-        pyinstaller --noconfirm --onefile --windowed --name="PNGTuberPro_Windows" main_windows.py
-    - name: Upload Windows Artifact
+
+        pyinstaller ^
+        --noconfirm ^
+        --onefile ^
+        --windowed ^
+        --name PNGTuberPro ^
+        PNGTuberPro/main.py
+
+
+
+    - name: Build Creator
+
+      run: |
+
+        pyinstaller ^
+        --noconfirm ^
+        --onefile ^
+        --windowed ^
+        --name PLIMBCreator ^
+        PLIMBCreator/creator.py
+
+
+
+    - name: Upload
+
       uses: actions/upload-artifact@v4
+
       with:
+
         name: PNGTuber-Windows
-        path: dist/PNGTuberPro_Windows.exe
 
-  build-android:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
-
-    - name: Install System Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y git zip unzip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev libsqlite3-dev tk-dev libgdbm-compat-dev libreoffice-writer
-
-    - name: Install Buildozer & Pinned Cython
-      run: |
-        pip install --upgrade pip
-        pip install buildozer "Cython==0.29.33" Pillow git+https://github.com/kivy/plyer.git
-
-    - name: Configure Buildozer Spec & Assets
-      run: |
-        python -c "from PIL import Image; img = Image.new('RGB', (512, 512), (255, 255, 255)); img.save('icon.png')"
-        python -c "from PIL import Image; img = Image.new('RGB', (1024, 1024), (0, 255, 0)); img.save('presplash.png')"
-
-        if [ ! -f buildozer.spec ]; then
-          buildozer init
-          
-          # Configuration Requirements (Pygame) et métadonnées
-          sed -i 's/requirements = python3,kivy/requirements = python3,pygame/g' buildozer.spec
-          sed -i 's/title = My Application/title = PNGTuber Mobile/g' buildozer.spec
-          sed -i 's/package.name = myapp/package.name = pngtubermobile/g' buildozer.spec
-          sed -i 's/source.include_exts = py,png,jpg,kv,atlas/source.include_exts = py,png/g' buildozer.spec
-          sed -i 's/source.main = main.py/source.main = main_android.py/g' buildozer.spec
-          
-          # Alignement strict sur les versions du SDK installé manuellement
-          sed -i 's/#android.api = 33/android.api = 33/g' buildozer.spec
-          sed -i 's/#android.minapi = 21/android.minapi = 21/g' buildozer.spec
-          sed -i 's/#android.build_tools_version = .*/android.build_tools_version = 33.0.2/g' buildozer.spec
-          sed -i 's/#android.accept_sdk_license = False/android.accept_sdk_license = True/g' buildozer.spec
-          
-          # Force l'utilisation de notre SDK manuel dans la spec
-          sed -i 's|#android.sdk_path = .*|android.sdk_path = /usr/local/lib/android/sdk|g' buildozer.spec
-          sed -i 's|#android.ndk_path = .*|android.ndk_path = /usr/local/lib/android/sdk/ndk/23.1.7779620|g' buildozer.spec
-          
-          sed -i 's/icon.filename = %(source.dir)s\/data\/icon.png/icon.filename = icon.png/g' buildozer.spec
-          sed -i 's/presplash.filename = %(source.dir)s\/data\/presplash.png/presplash.filename = presplash.png/g' buildozer.spec
-        fi
-
-    - name: Install Android SDK command-line tools and packages
-      run: |
-        export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
-        sudo rm -rf $ANDROID_SDK_ROOT
-        sudo mkdir -p $ANDROID_SDK_ROOT
-
-        # Téléchargement et extraction des outils officiels Google
-        CMDLINE_ZIP=/tmp/cmdline-tools.zip
-        curl -fsSL "https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip" -o $CMDLINE_ZIP
-        sudo unzip -q $CMDLINE_ZIP -d $ANDROID_SDK_ROOT/cmdline-tools
-        sudo mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
-
-        # Permissions utilisateur
-        sudo chown -R $USER:$USER $ANDROID_SDK_ROOT
-
-        # Injection temporaire dans le PATH
-        export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
-
-        # Acceptation des licences et installation des paquets (dont build-tools avec aidl)
-        yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses
-        sdkmanager --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "platforms;android-33" "build-tools;33.0.2" "cmdline-tools;latest" "ndk;23.1.7779620"
-
-        # Exportation persistante des variables d'environnement
-        echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-        echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-        echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/23.1.7779620" >> $GITHUB_ENV
-
-    - name: Verify aidl and sdkmanager
-      run: |
-        export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
-        # CORRECTION ICI: Ajout de build-tools/33.0.2 dans le PATH pour trouver aidl
-        export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/build-tools/33.0.2:$PATH"
-        
-        which sdkmanager || { echo "sdkmanager non trouvé"; exit 1; }
-        which aidl || { echo "aidl non trouvé dans le PATH"; exit 1; }
-
-    - name: Run Buildozer
-      run: |
-        export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
-        export ANDROID_HOME=/usr/local/lib/android/sdk
-        export ANDROID_NDK_HOME=/usr/local/lib/android/sdk/ndk/23.1.7779620
-        # Alignement du PATH pour Buildozer également
-        export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/build-tools/33.0.2:$PATH"
-
-        buildozer -v android debug
-
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: PNGTuber-Android
-        path: bin/*.apk
-        
+        path: |
+          dist/PNGTuberPro.exe
+          dist/PLIMBCreator.exe
