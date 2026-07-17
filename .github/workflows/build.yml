@@ -45,54 +45,51 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y git zip unzip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev libsqlite3-dev tk-dev libgdbm-compat-dev libreoffice-writer
 
-    - name: Install Buildozer & Cython
+    - name: Install Buildozer & Pinned Cython
       run: |
         pip install --upgrade pip
-        pip install buildozer cython Pillow git+https://github.com/kivy/plyer.git
+        # FIX CRITIQUE: Forcer Cython 0.29.33 pour éviter le crash de python-for-android
+        pip install buildozer "Cython==0.29.33" Pillow git+https://github.com/kivy/plyer.git
 
     - name: Configure Buildozer Spec & Assets
       run: |
-        # Génération d'images temporaires de secours à la racine
         python -c "from PIL import Image; img = Image.new('RGB', (512, 512), (255, 255, 255)); img.save('icon.png')"
         python -c "from PIL import Image; img = Image.new('RGB', (1024, 1024), (0, 255, 0)); img.save('presplash.png')"
 
         if [ ! -f buildozer.spec ]; then
           buildozer init
-          sed -i 's/title = My Application/title = PNGTuber Mobile/' buildozer.spec
-          sed -i 's/package.name = myapp/package.name = pngtubermobile/' buildozer.spec
-          sed -i 's/source.include_exts = py,png,jpg,kv,atlas/source.include_exts = py,png/' buildozer.spec
-          sed -i 's/#requirements = python3,kivy/requirements = python3,pygame/' buildozer.spec
-          sed -i 's/source.main = main.py/source.main = main_android.py/' buildozer.spec
           
-          # Fixs de versions stables pour l'API Android
-          sed -i 's/#android.api = 33/android.api = 33/' buildozer.spec
-          sed -i 's/#android.minapi = 21/android.minapi = 21/' buildozer.spec
+          # FIX CRITIQUE: Remplacement propre de Kivy par Pygame sans le dièse
+          sed -i 's/requirements = python3,kivy/requirements = python3,pygame/g' buildozer.spec
+          
+          sed -i 's/title = My Application/title = PNGTuber Mobile/g' buildozer.spec
+          sed -i 's/package.name = myapp/package.name = pngtubermobile/g' buildozer.spec
+          sed -i 's/source.include_exts = py,png,jpg,kv,atlas/source.include_exts = py,png/g' buildozer.spec
+          sed -i 's/source.main = main.py/source.main = main_android.py/g' buildozer.spec
+          
+          sed -i 's/#android.api = 33/android.api = 33/g' buildozer.spec
+          sed -i 's/#android.minapi = 21/android.minapi = 21/g' buildozer.spec
           sed -i 's/#android.build_tools_version = .*/android.build_tools_version = 34.0.0/' buildozer.spec
-          sed -i 's/#android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
+          sed -i 's/#android.accept_sdk_license = False/android.accept_sdk_license = True/g' buildozer.spec
           
-          sed -i 's/icon.filename = %(source.dir)s\/data\/icon.png/icon.filename = icon.png/' buildozer.spec
-          sed -i 's/presplash.filename = %(source.dir)s\/data\/presplash.png/presplash.filename = presplash.png/' buildozer.spec
+          sed -i 's/icon.filename = %(source.dir)s\/data\/icon.png/icon.filename = icon.png/g' buildozer.spec
+          sed -i 's/presplash.filename = %(source.dir)s\/data\/presplash.png/presplash.filename = presplash.png/g' buildozer.spec
         fi
 
     - name: Bridge and Auto-Accept Android SDK Layout
       run: |
-        # 1. On crée à l'avance le dossier où Buildozer va chercher l'ancien sdkmanager
         mkdir -p ~/.buildozer/android/platform/android-sdk/tools/bin
-        
-        # 2. On injecte un script de triche (wrapper) à cet endroit précis.
-        # Ce script intercepte les appels de Buildozer et utilise le sdkmanager officiel stable
-        # de GitHub, tout en lui forçant à répondre "yes" à toutes les licences en tâche de fond.
         cat << 'EOF' > ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager
         #!/bin/bash
         yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=/home/runner/.buildozer/android/platform/android-sdk "$@"
         EOF
         chmod +x ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager
-
-        # 3. Validation préventive immédiate de toutes les licences dans le répertoire isolé
         ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager --licenses || true
 
     - name: Run Buildozer
       run: |
+        # On supprime la variable NDK de GitHub pour forcer Buildozer à utiliser la sienne (plus stable)
+        export ANDROID_NDK_HOME=""
         buildozer -v android debug
 
     - name: Upload APK Artifact
