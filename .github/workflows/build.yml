@@ -57,23 +57,33 @@ jobs:
           sed -i 's/#requirements = python3,kivy/requirements = python3,pygame/' buildozer.spec
           sed -i 's/source.main = main.py/source.main = main_android.py/' buildozer.spec
           
+          # Forçage des versions d'API et téléchargement des cmdline-tools modernes
           sed -i 's/#android.api = 33/android.api = 33/' buildozer.spec
           sed -i 's/#android.minapi = 21/android.minapi = 21/' buildozer.spec
           sed -i 's/#android.ndk_api = 21/android.ndk_api = 21/' buildozer.spec
           sed -i 's/#android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
           
+          # Ligne magique : on force Buildozer à prendre des outils de ligne de commande récents
+          sed -i 's/#android.sdk_tools_version = .*/android.sdk_tools_version = 9477386/' buildozer.spec
+          
           sed -i 's/icon.filename = %(source.dir)s\/data\/icon.png/icon.filename = icon.png/' buildozer.spec
           sed -i 's/presplash.filename = %(source.dir)s\/data\/presplash.png/presplash.filename = presplash.png/' buildozer.spec
         fi
 
-    - name: Auto-Accept All Android SDK Licenses
+    - name: Patch SDK Paths & Accept Licenses
       run: |
-        # On utilise le sdkmanager préinstallé sur la machine virtuelle Ubuntu de GitHub pour valider en boucle toutes les licences
-        mkdir -p ~/.android
-        touch ~/.android/repositories.cfg
-        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+        # 1. On pré-crée l'arborescence que Buildozer va utiliser pour son SDK isolé
+        mkdir -p ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin
+        mkdir -p ~/.buildozer/android/platform/android-sdk/tools/bin
         
-        # On copie aussi les fichiers de licences validés là où Buildozer va créer son propre SDK isolé
+        # 2. On lie le sdkmanager global de GitHub Actions pour l'injecter chez Buildozer
+        ln -s $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager || true
+        
+        # 3. TRICHE : Si Buildozer cherche dans l'ancien dossier "tools/bin", le lien symbolique le redirige vers le vrai sdkmanager fonctionnel
+        ln -s $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager || true
+
+        # 4. On valide les licences partout
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
         mkdir -p ~/.buildozer/android/platform/android-sdk/licenses
         cp -r $ANDROID_HOME/licenses/* ~/.buildozer/android/platform/android-sdk/licenses/ || true
 
