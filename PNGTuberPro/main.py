@@ -1,48 +1,47 @@
 import tkinter as tk
-from tkinter import filedialog, colorchooser
+from tkinter import filedialog,colorchooser
 
 import pygame
-from PIL import Image
 import sounddevice as sd
 import numpy as np
 
-import threading
-import zipfile
-import json
-import os
+from PIL import Image
+
+from plimb_loader import Plimb
+from settings import settings
 
 
-# ==========================
-# VARIABLES GLOBALES
-# ==========================
 
-WIDTH = 800
-HEIGHT = 800
-
-closed_img = None
-opened_img = None
-current_img = None
-
-background_color = (0, 255, 0)
-
-open_threshold = 0.03
-
-mouth_open = False
-
-running = True
+WIDTH=800
+HEIGHT=800
 
 
-# ==========================
-# CHARGEMENT IMAGE
-# ==========================
 
-def load_image(path):
+pygame.init()
 
-    img = Image.open(path).convert("RGBA")
 
-    img = img.resize(
-        (WIDTH, HEIGHT)
-    )
+screen=pygame.display.set_mode(
+    (WIDTH,HEIGHT)
+)
+
+pygame.display.set_caption(
+    "PNGTuber Pro"
+)
+
+
+
+plimb=None
+
+
+closed=None
+opened=None
+
+
+current=None
+
+
+
+def pil_to_surface(img):
 
     return pygame.image.fromstring(
         img.tobytes(),
@@ -51,154 +50,72 @@ def load_image(path):
     )
 
 
-# ==========================
-# CHARGEMENT PLIMB
-# ==========================
 
 def load_plimb():
 
-    global closed_img
-    global opened_img
+    global plimb
+    global closed
+    global opened
+    global current
 
-    path = filedialog.askopenfilename(
+
+    path=filedialog.askopenfilename(
         filetypes=[
-            ("PNG Tuber Mod", "*.plimb")
+            (
+            "PLIMB",
+            "*.plimb"
+            )
         ]
     )
 
-    if not path:
-        return
+
+    if path:
 
 
-    temp = "plimb_temp"
+        plimb=Plimb(path)
 
 
-    if os.path.exists(temp):
-        import shutil
-        shutil.rmtree(temp)
-
-
-    os.mkdir(temp)
-
-
-    with zipfile.ZipFile(path,"r") as z:
-        z.extractall(temp)
-
-
-    config = os.path.join(
-        temp,
-        "plimb.json"
-    )
-
-
-    if os.path.exists(config):
-
-        with open(config,"r") as f:
-            data=json.load(f)
-
-
-        if "mouth_closed" in data:
-            closed_img = load_image(
-                os.path.join(
-                    temp,
-                    data["mouth_closed"]
-                )
-            )
-
-
-        if "mouth_open" in data:
-            opened_img = load_image(
-                os.path.join(
-                    temp,
-                    data["mouth_open"]
-                )
-            )
-
-
-    print("PLIMB chargé :",path)
-
-
-
-# ==========================
-# MICRO
-# ==========================
-
-def audio_callback(
-    indata,
-    frames,
-    time,
-    status
-):
-
-    global mouth_open
-    global current_img
-
-
-    volume = np.sqrt(
-        np.mean(
-            indata ** 2
+        settings.background=tuple(
+            plimb.get_background()
         )
-    )
 
 
-    if volume > open_threshold:
+        c=plimb.load_image(
+            "mouth_closed",
+            (WIDTH,HEIGHT)
+        )
 
-        mouth_open=True
-
-    else:
-
-        mouth_open=False
-
-
-    if mouth_open:
-
-        current_img=opened_img
-
-    else:
-
-        current_img=closed_img
+        o=plimb.load_image(
+            "mouth_open",
+            (WIDTH,HEIGHT)
+        )
 
 
+        if c:
+            closed=pil_to_surface(c)
 
-def start_micro():
-
-    stream = sd.InputStream(
-        channels=1,
-        callback=audio_callback
-    )
-
-    stream.start()
-
-    return stream
+        if o:
+            opened=pil_to_surface(o)
 
 
+        current=closed
 
-# ==========================
-# FENETRE TKINTER
-# ==========================
-
-
-def change_sensitivity(value):
-
-    global open_threshold
-
-    open_threshold=float(value)
 
 
 
 def change_background():
 
-    global background_color
-
     color=colorchooser.askcolor()
 
     if color[0]:
 
-        background_color=(
+        settings.background=(
             int(color[0][0]),
             int(color[0][1]),
             int(color[0][2])
         )
+
+
 
 
 
@@ -208,133 +125,28 @@ root.title(
     "PNGTuber Control"
 )
 
+
 root.geometry(
-    "350x300"
+    "350x200"
 )
-
-
-
-btn=tk.Button(
-    root,
-    text="Charger un PLIMB",
-    command=load_plimb
-)
-
-btn.pack(
-    pady=20
-)
-
-
-
-tk.Label(
-    root,
-    text="Sensibilité micro"
-).pack()
-
-
-
-slider=tk.Scale(
-    root,
-    from_=0.001,
-    to=0.2,
-    resolution=0.001,
-    orient="horizontal",
-    command=change_sensitivity
-)
-
-slider.set(
-    open_threshold
-)
-
-slider.pack()
 
 
 
 tk.Button(
     root,
-    text="Changer le fond",
-    command=change_background
+    text="Charger PLIMB",
+    command=load_plimb
 ).pack(
-    pady=20
+    pady=10
 )
 
 
 
-# ==========================
-# THREAD PYGAME
-# ==========================
-
-
-def pygame_window():
-
-
-    global current_img
-
-
-    pygame.init()
-
-
-    screen=pygame.display.set_mode(
-        (
-            WIDTH,
-            HEIGHT
-        )
-    )
-
-
-    pygame.display.set_caption(
-        "PNGTuber"
-    )
-
-
-    clock=pygame.time.Clock()
-
-
-
-    while running:
-
-
-        for event in pygame.event.get():
-
-            if event.type==pygame.QUIT:
-
-                pygame.quit()
-                return
-
-
-
-        screen.fill(
-            background_color
-        )
-
-
-        if current_img:
-
-            screen.blit(
-                current_img,
-                (0,0)
-            )
-
-
-        pygame.display.flip()
-
-
-        clock.tick(60)
-
-
-
-# ==========================
-# DEMARRAGE
-# ==========================
-
-
-stream=start_micro()
-
-
-threading.Thread(
-    target=pygame_window,
-    daemon=True
-).start()
+tk.Button(
+    root,
+    text="Changer fond",
+    command=change_background
+).pack()
 
 
 
@@ -342,7 +154,96 @@ root.mainloop()
 
 
 
+mouth=False
+
+
+
+def audio_callback(indata,frames,time,status):
+
+    global mouth
+    global current
+
+
+    volume=np.sqrt(
+        np.mean(
+            indata**2
+        )
+    )
+
+
+    volume*=settings.volume_boost
+
+
+
+    if not mouth and volume>settings.open_threshold:
+
+        mouth=True
+
+
+    elif mouth and volume<settings.close_threshold:
+
+        mouth=False
+
+
+
+    if mouth and opened:
+
+        current=opened
+
+    elif closed:
+
+        current=closed
+
+
+
+
+
+stream=sd.InputStream(
+    channels=1,
+    callback=audio_callback
+)
+
+stream.start()
+
+
+
+clock=pygame.time.Clock()
+
+
+running=True
+
+
+while running:
+
+
+    for event in pygame.event.get():
+
+        if event.type==pygame.QUIT:
+
+            running=False
+
+
+
+    screen.fill(
+        settings.background
+    )
+
+
+    if current:
+
+        screen.blit(
+            current,
+            (0,0)
+        )
+
+
+    pygame.display.flip()
+
+
+    clock.tick(60)
+
+
+
 stream.stop()
-stream.close()
 
 pygame.quit()
