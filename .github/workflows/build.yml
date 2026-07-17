@@ -46,7 +46,6 @@ jobs:
 
     - name: Configure Buildozer Spec & Assets
       run: |
-        # Création d'images temporaires de secours au cas où elles manquent à la racine
         python -c "from PIL import Image; img = Image.new('RGB', (512, 512), (255, 255, 255)); img.save('icon.png')"
         python -c "from PIL import Image; img = Image.new('RGB', (1024, 1024), (0, 255, 0)); img.save('presplash.png')"
 
@@ -55,24 +54,22 @@ jobs:
           sed -i 's/title = My Application/title = PNGTuber Mobile/' buildozer.spec
           sed -i 's/package.name = myapp/package.name = pngtubermobile/' buildozer.spec
           sed -i 's/source.include_exts = py,png,jpg,kv,atlas/source.include_exts = py,png/' buildozer.spec
-          sed -i 's/#requirements = python3,kivy/requirements = python3,pygame,urllib3/' buildozer.spec
+          sed -i 's/#requirements = python3,kivy/requirements = python3,pygame/' buildozer.spec
           sed -i 's/source.main = main.py/source.main = main_android.py/' buildozer.spec
+          
+          # Fixs critiques pour forcer les versions stables et éviter l'erreur sdkmanager
+          sed -i 's/#android.api = 33/android.api = 33/' buildozer.spec
+          sed -i 's/#android.minapi = 21/android.minapi = 21/' buildozer.spec
+          sed -i 's/#android.ndk_api = 21/android.ndk_api = 21/' buildozer.spec
           sed -i 's/#android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
-          # Utilisation des images de secours générées juste au-dessus
+          
           sed -i 's/icon.filename = %(source.dir)s\/data\/icon.png/icon.filename = icon.png/' buildozer.spec
           sed -i 's/presplash.filename = %(source.dir)s\/data\/presplash.png/presplash.filename = presplash.png/' buildozer.spec
         fi
 
-    - name: Force Accept Android Licenses
-      run: |
-        mkdir -p ~/.buildozer/android/platform/android-sdk/licenses
-        echo -e "\n24333f8a63b6825ea9c5514f83c2829b004d1fee" > ~/.buildozer/android/platform/android-sdk/licenses/android-sdk-license
-        echo -e "\n84831b9409646a918e30573bab4c9c91346d8abd" > ~/.buildozer/android/platform/android-sdk/licenses/android-sdk-preview-license
-        echo -e "\nd56f5187479451eabf01fb74314400a41d6d8ff6" > ~/.buildozer/android/platform/android-sdk/licenses/android-googletv-license
-
     - name: Run Buildozer
       run: |
-        # Exécution en forçant le nettoyage des anciens résidus s'il y en a
+        # Lancement classique, Buildozer va maintenant télécharger le SDK complet adapté à l'API 33
         buildozer -v android debug
 
     - name: Upload APK Artifact
